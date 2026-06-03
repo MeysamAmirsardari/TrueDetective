@@ -2,3 +2,4 @@ psychopy>=2023.2.3
 pylsl>=1.16.2
 numpy>=1.24.0
 pandas>=2.0.0
+websockets>=12.0
