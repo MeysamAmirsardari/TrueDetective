@@ -39,8 +39,8 @@ from pylsl import StreamInfo, StreamOutlet
 # CONFIGURATION
 # =============================================================================
 
-CLIENT_ID = "YOUR_CORTEX_CLIENT_ID"
-CLIENT_SECRET = "YOUR_CORTEX_CLIENT_SECRET"
+CLIENT_ID = "ulHT52M4TPrd9nLiAqvsJk9kCiLJfC2e3ohqw2B2"
+CLIENT_SECRET = "Vs5H2GHMzg5FbDM4yCRW7qk2vbE3VDe681pgoSI8K4CSTxbVWUjoEf9Mq3bCfJYVsW0FyAT7w4mwwlNl9lkOrjxIsQd694Zq1yStveBkO1jHsSyz2kGzAf4nA3JgsyDr"
 LICENSE = ""                # leave "" to use the account default license
 DEBIT = 1                   # session-debit count for license metering
 
@@ -101,7 +101,7 @@ class CortexClient:
     debit: int = 1
     url: str = CORTEX_URL
 
-    ws: Optional[websockets.WebSocketClientProtocol] = None
+    ws: Optional[Any] = None
     cortex_token: Optional[str] = None
     session_id: Optional[str] = None
     headset_id: Optional[str] = None
