@@ -8,25 +8,33 @@ Stimulus roles
 --------------
     TARGET      One constant name for the whole session, chosen by drawing
                 a card in Phase 1 (the card->name mapping is hidden/random,
-                so it is effectively auto-assigned). Respond UP (acknowledge).
-    PROBE       Your constant "secret", drawn once at the start (a second
-                card draw). Respond DOWN (deny) — the SAME response as
-                irrelevants — so that only the EEG (P300) reveals recognition.
-    IRRELEVANT  Eight neutral names per block, drawn fresh from the pool.
-                Respond DOWN (deny).
+                so it is effectively auto-assigned). Acknowledge it with the
+                TARGET key (RIGHT or UP arrow — either works).
+    SECRET      Your constant "secret", drawn once at the start (a second
+                card draw). Deny it with the DENY key (LEFT or DOWN arrow) —
+                the SAME response as irrelevants — so that only the EEG (P300)
+                reveals recognition.
+    IRRELEVANT  A fixed set of eight neutral names, drawn once at the start
+                and reused every block so all ten names appear equally often.
+                Deny (LEFT or DOWN arrow).
 
-Each block = 10 distinct names (1 probe + 1 target + 8 irrelevants),
-presented one at a time in a shuffled oddball order.
+Each block = the same 10 names (1 secret + 1 target + 8 irrelevants),
+re-shuffled into a fresh oddball order. Every name is shown exactly once per
+block, so the secret, target, and each irrelevant are frequency-balanced.
 
 LSL markers (pushed on the exact stimulus flip)
 -----------------------------------------------
-    1 = probe (secret)      2 = irrelevant      3 = target
-    10 = session start  11 = block start  12 = probe cue  99 = session end
+    1 = secret      2 = irrelevant      3 = target
+    10 = session start  11 = block start  12 = secret cue  99 = session end
 
 Output
 ------
     data/behavioral_data_<timestamp>.csv  — trial-by-trial RTs, responses,
                                             accuracy, and onset timestamps.
+                                            Responses are key-agnostic codes:
+                                            1 = target acknowledged, 0 = denied
+                                            (so LEFT/RIGHT and UP/DOWN are
+                                            interchangeable).
 
 Install once:
     pip install psychopy pylsl numpy
@@ -52,7 +60,8 @@ CONFIG = {
     "monitor_name": "testMonitor",
 
     # ── Names ───────────────────────────────────────────────────────────
-    # A large master pool; each block draws its probe + irrelevants from it.
+    # A large master pool; the secret, target, and the fixed irrelevant set
+    # are all drawn from it once at the start of the session.
     "master_name_pool": [
         "LIAM", "OLIVIA", "NOAH", "EMMA", "OLIVER", "AVA", "ELIJAH", "SOPHIA",
         "JAMES", "ISABELLA", "WILLIAM", "MIA", "BENJAMIN", "CHARLOTTE",
@@ -65,10 +74,10 @@ CONFIG = {
     ],
 
     # ── Block / trial structure ────────────────────────────────────────
-    "names_per_block": 10,               # 1 probe + 1 target + 8 irrelevant
+    "names_per_block": 10,               # 1 secret + 1 target + 8 irrelevant
     "n_blocks": 20,                      # scale up (>=30) for real EEG runs
 
-    # ── Card-draw mechanic (both names drawn once, at the start) ───────
+    # ── Card-draw mechanic (target + secret drawn once, at the start) ──
     "target_draw_n_cards": 5,            # cards shown when drawing the target
     "secret_draw_n_cards": 5,            # cards shown when drawing the secret
     "reveal_view_min": 1.2,              # min seconds to view a revealed name
@@ -81,9 +90,11 @@ CONFIG = {
     "iti": 0.500,
     "flip_anim_frames": 38,              # card-flip animation length
 
-    # ── Response keys ──────────────────────────────────────────────────
-    "target_key": "up",                  # acknowledge the constant target
-    "deny_key": "down",                  # deny probe + irrelevants
+    # ── Response keys (either arrow pair works) ────────────────────────
+    # Target = RIGHT or UP; deny = LEFT or DOWN. Responses are logged by
+    # meaning (1/0), not by physical key, so the two pairs are interchangeable.
+    "target_keys": ["right", "up"],      # acknowledge the constant target
+    "deny_keys": ["left", "down"],       # deny secret + irrelevants
     "advance_key": "space",
     "quit_key": "escape",
 
@@ -109,19 +120,25 @@ CONFIG = {
 }
 
 # Marker codes
-MARKER_PROBE = 1          # secret (deny)
+MARKER_SECRET = 1         # secret (deny)
 MARKER_IRRELEVANT = 2     # neutral (deny)
 MARKER_TARGET = 3         # constant target (acknowledge)
 MARKER_SESSION_START = 10
 MARKER_BLOCK_START = 11
-MARKER_PROBE_CUE = 12
+MARKER_SECRET_CUE = 12
 MARKER_SESSION_END = 99
 
 TRIAL_TYPE_MARKER = {
-    "probe": MARKER_PROBE,
+    "secret": MARKER_SECRET,
     "irrelevant": MARKER_IRRELEVANT,
     "target": MARKER_TARGET,
 }
+
+# Key-agnostic response codes written to the CSV. Recording the *meaning* of
+# the press (rather than "left"/"right"/"up"/"down") keeps the data identical
+# no matter which arrow pair the participant used.
+RESPONSE_TARGET = 1       # acknowledged as the target
+RESPONSE_DENY = 0         # denied (secret or irrelevant)
 
 
 # =============================================================================
@@ -140,12 +157,12 @@ def init_lsl_outlet():
     )
     markers = info.desc().append_child("markers")
     for code, label in [
-        (MARKER_PROBE, "probe"),
+        (MARKER_SECRET, "secret"),
         (MARKER_IRRELEVANT, "irrelevant"),
         (MARKER_TARGET, "target"),
         (MARKER_SESSION_START, "session_start"),
         (MARKER_BLOCK_START, "block_start"),
-        (MARKER_PROBE_CUE, "probe_cue"),
+        (MARKER_SECRET_CUE, "secret_cue"),
         (MARKER_SESSION_END, "session_end"),
     ]:
         m = markers.append_child("marker")
@@ -222,7 +239,7 @@ def wait_for_keys(keys, min_wait=0.0):
 
 
 # =============================================================================
-# Card-draw mechanic (reusable for target and per-block probe)
+# Card-draw mechanic (reusable for both the target and the secret draws)
 # =============================================================================
 
 def _build_cards(win, names):
@@ -394,12 +411,12 @@ def show_instructions(win):
         win,
         text=(
             "First you will draw two cards, one after the other:\n"
-            "    •  a TARGET name — press the UP arrow whenever it appears.\n"
-            "    •  a name to REMEMBER — press the DOWN arrow for it, the\n"
+            "    •  a TARGET name — press the RIGHT arrow whenever it appears.\n"
+            "    •  a name to REMEMBER — press the LEFT arrow for it, the\n"
             "       same as every other name.\n\n"
             "Both names stay the same for the whole session.\n\n"
-            "After that, names appear one at a time. Press UP only for your\n"
-            "target name; press DOWN for all other names.\n\n"
+            "After that, names appear one at a time. Press RIGHT only for your\n"
+            "target name; press LEFT for all other names.\n\n"
             "Please respond as quickly and accurately as you can.\n"
             "Keep your gaze on the central cross and try to stay still."
         ),
@@ -421,7 +438,7 @@ def show_instructions(win):
 def show_rules(win, target_name, secret_name):
     """Confirm the response rule for both the target and the secret."""
     target_label = visual.TextStim(
-        win, text="TARGET NAME  —  press the UP arrow", pos=(0, 0.24),
+        win, text="TARGET NAME  —  press the RIGHT arrow", pos=(0, 0.24),
         height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
     target_stim = visual.TextStim(
@@ -429,7 +446,7 @@ def show_rules(win, target_name, secret_name):
         color=CONFIG["color_accent"], font=CONFIG["font_display"], bold=True,
     )
     secret_label = visual.TextStim(
-        win, text="NAME TO REMEMBER  —  press the DOWN arrow", pos=(0, -0.04),
+        win, text="NAME TO REMEMBER  —  press the LEFT arrow", pos=(0, -0.04),
         height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
     secret_stim = visual.TextStim(
@@ -438,7 +455,7 @@ def show_rules(win, target_name, secret_name):
     )
     note = visual.TextStim(
         win,
-        text="Press DOWN for every other name as well.",
+        text="Press LEFT for every other name as well.",
         pos=(0, -0.26), height=0.024,
         color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
@@ -460,17 +477,15 @@ def show_rules(win, target_name, secret_name):
 # Block construction
 # =============================================================================
 
-def build_block(target_name, probe_name, pool):
+def build_block(target_name, secret_name, irrelevants):
     """
-    Build one block's sequence given the (already drawn) probe and the
-    constant target: probe + target + 8 fresh irrelevants, all distinct,
-    shuffled. Returns the (name, trial_type) sequence.
+    Build one block's sequence from the constant secret, the constant target,
+    and the fixed list of irrelevants. The same ten names are reused in every
+    block — only their order is reshuffled — so every name is shown exactly
+    once per block and is therefore frequency-balanced across the session.
+    Returns the (name, trial_type) sequence.
     """
-    n_irrelevant = CONFIG["names_per_block"] - 2
-    available = [n for n in pool if n not in (target_name, probe_name)]
-    irrelevants = random.sample(available, n_irrelevant)
-
-    sequence = [(probe_name, "probe"), (target_name, "target")]
+    sequence = [(secret_name, "secret"), (target_name, "target")]
     sequence += [(name, "irrelevant") for name in irrelevants]
     random.shuffle(sequence)
     return sequence
@@ -487,8 +502,23 @@ def stylized_fixation(win):
     ).draw()
 
 
-def expected_key(trial_type):
-    return CONFIG["target_key"] if trial_type == "target" else CONFIG["deny_key"]
+def response_keys():
+    """Every accepted response key (both arrow pairs)."""
+    return CONFIG["target_keys"] + CONFIG["deny_keys"]
+
+
+def response_code(key):
+    """Map a physical key to its key-agnostic response code (1/0), or None."""
+    if key in CONFIG["target_keys"]:
+        return RESPONSE_TARGET
+    if key in CONFIG["deny_keys"]:
+        return RESPONSE_DENY
+    return None
+
+
+def expected_response(trial_type):
+    """Correct response code for a trial type: target → 1, otherwise → 0."""
+    return RESPONSE_TARGET if trial_type == "target" else RESPONSE_DENY
 
 
 def run_trial(win, outlet, stim_text, name, trial_type):
@@ -531,15 +561,14 @@ def run_trial(win, outlet, stim_text, name, trial_type):
             win.flip()
 
         keys = event.getKeys(
-            keyList=[CONFIG["target_key"], CONFIG["deny_key"],
-                     CONFIG["quit_key"]],
+            keyList=response_keys() + [CONFIG["quit_key"]],
             timeStamped=rt_clock,
         )
         if keys:
             key_name, key_time = keys[0]
             if key_name == CONFIG["quit_key"]:
                 raise KeyboardInterrupt("User pressed escape.")
-            response, rt = key_name, key_time
+            response, rt = response_code(key_name), key_time
             break
 
     if stim_visible:
@@ -551,13 +580,13 @@ def run_trial(win, outlet, stim_text, name, trial_type):
         win.flip()
         check_quit()
 
-    exp_key = expected_key(trial_type)
-    correct = (response == exp_key)
+    exp_code = expected_response(trial_type)
+    correct = (response == exp_code)
     return {
         "stimulus": name,
         "trial_type": trial_type,
         "marker_code": marker_code,
-        "expected_key": exp_key,
+        "expected_response": exp_code,
         "response": response if response is not None else "none",
         "correct": int(correct),
         "rt_seconds": round(rt, 4) if rt is not None else "",
@@ -567,11 +596,17 @@ def run_trial(win, outlet, stim_text, name, trial_type):
 
 
 def run_session(win, outlet, target_name, secret_name):
-    """Run all blocks. The probe (secret) and target are constant; only the
-    eight irrelevants are re-drawn fresh from the pool each block."""
+    """Run all blocks. The secret, the target, and the eight irrelevants are
+    all fixed for the whole session; only their order is reshuffled each block,
+    so every name appears exactly once per block (frequency-balanced)."""
     outlet.push_sample([MARKER_SESSION_START])
     pool = CONFIG["master_name_pool"]
     n_blocks = CONFIG["n_blocks"]
+
+    # Fixed irrelevant set, drawn once so every name is equally frequent.
+    n_irrelevant = CONFIG["names_per_block"] - 2
+    available = [n for n in pool if n not in (target_name, secret_name)]
+    irrelevants = random.sample(available, n_irrelevant)
 
     stim_text = visual.TextStim(
         win, text="", pos=(0, 0), height=0.12,
@@ -580,7 +615,7 @@ def run_session(win, outlet, target_name, secret_name):
 
     results = []
     for block_idx in range(1, n_blocks + 1):
-        sequence = build_block(target_name, secret_name, pool)
+        sequence = build_block(target_name, secret_name, irrelevants)
 
         outlet.push_sample([MARKER_BLOCK_START])
         for pos, (name, trial_type) in enumerate(sequence, start=1):
@@ -589,7 +624,7 @@ def run_session(win, outlet, target_name, secret_name):
             row.update({
                 "block": block_idx,
                 "position_in_block": pos,
-                "session_probe": secret_name,
+                "session_secret": secret_name,
                 "session_target": target_name,
             })
             results.append(row)
@@ -610,8 +645,8 @@ def save_results(results, target_name):
 
     fieldnames = [
         "block", "position_in_block", "stimulus", "trial_type",
-        "marker_code", "session_probe", "session_target",
-        "expected_key", "response", "correct", "rt_seconds",
+        "marker_code", "session_secret", "session_target",
+        "expected_response", "response", "correct", "rt_seconds",
         "stim_onset_psychopy", "stim_onset_lsl",
     ]
     with open(fname, "w", newline="") as f:
@@ -680,8 +715,8 @@ def main():
             header_label="DRAW A NAME TO REMEMBER",
             prompt_text="Draw a card to receive the name to remember.",
             reveal_caption=("Remember this name. Respond to it with the "
-                            "DOWN arrow, the same as the other names."),
-            outlet=outlet, reveal_marker=MARKER_PROBE_CUE,
+                            "LEFT arrow, the same as the other names."),
+            outlet=outlet, reveal_marker=MARKER_SECRET_CUE,
             min_view=CONFIG["reveal_view_min"],
         )
         show_rules(win, target_name, secret_name)
