@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── TrueDetective project ──────────────────────────────────────────────
+# JetBrains IDE settings
+.idea/
+# Raw recordings & participant data (large binaries / PII — keep out of git)
+data/
+# Generated analysis artifacts (reproducible by re-running the pipeline)
+analysis/results/
+analysis/figures/
