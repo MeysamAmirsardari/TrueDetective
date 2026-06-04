@@ -9,10 +9,9 @@ Stimulus roles
     TARGET      One constant name for the whole session, chosen by drawing
                 a card in Phase 1 (the card->name mapping is hidden/random,
                 so it is effectively auto-assigned). Respond UP (acknowledge).
-    PROBE       The "secret" for a block. Each block begins by drawing a
-                card that reveals a fresh name to remember. Respond DOWN
-                (deny) — the SAME response as irrelevants — so that only the
-                EEG (P300) reveals recognition.
+    PROBE       Your constant "secret", drawn once at the start (a second
+                card draw). Respond DOWN (deny) — the SAME response as
+                irrelevants — so that only the EEG (P300) reveals recognition.
     IRRELEVANT  Eight neutral names per block, drawn fresh from the pool.
                 Respond DOWN (deny).
 
@@ -69,11 +68,10 @@ CONFIG = {
     "names_per_block": 10,               # 1 probe + 1 target + 8 irrelevant
     "n_blocks": 20,                      # scale up (>=30) for real EEG runs
 
-    # ── Card-draw mechanic ─────────────────────────────────────────────
+    # ── Card-draw mechanic (both names drawn once, at the start) ───────
     "target_draw_n_cards": 5,            # cards shown when drawing the target
-    "probe_draw_n_cards": 3,             # cards shown each block for the probe
-    "use_card_draw_for_probe": True,     # False -> simple text cue instead
-    "probe_view_min": 1.2,               # min seconds to view a revealed probe
+    "secret_draw_n_cards": 5,            # cards shown when drawing the secret
+    "reveal_view_min": 1.2,              # min seconds to view a revealed name
 
     # ── Timing (seconds) ───────────────────────────────────────────────
     "fixation_min": 0.800,
@@ -395,13 +393,13 @@ def show_instructions(win):
     body = visual.TextStim(
         win,
         text=(
-            "First you will draw a card to receive your TARGET name for\n"
-            "the whole session.\n"
-            "    •  When your target name appears, press the UP arrow.\n"
-            "    •  For every other name, press the DOWN arrow.\n\n"
-            "Each block then begins by drawing a card that reveals one\n"
-            "name to remember. During that block, respond to it with the\n"
-            "DOWN arrow, the same as the other non-target names.\n\n"
+            "First you will draw two cards, one after the other:\n"
+            "    •  a TARGET name — press the UP arrow whenever it appears.\n"
+            "    •  a name to REMEMBER — press the DOWN arrow for it, the\n"
+            "       same as every other name.\n\n"
+            "Both names stay the same for the whole session.\n\n"
+            "After that, names appear one at a time. Press UP only for your\n"
+            "target name; press DOWN for all other names.\n\n"
             "Please respond as quickly and accurately as you can.\n"
             "Keep your gaze on the central cross and try to stay still."
         ),
@@ -420,57 +418,41 @@ def show_instructions(win):
         return
 
 
-def show_target_rule(win, target_name):
-    """Reinforce the response rule after the target has been drawn."""
-    caption = visual.TextStim(
-        win, text="YOUR TARGET NAME FOR THIS SESSION", pos=(0, 0.18),
-        height=0.026, color=CONFIG["color_dim"], font=CONFIG["font_body"],
+def show_rules(win, target_name, secret_name):
+    """Confirm the response rule for both the target and the secret."""
+    target_label = visual.TextStim(
+        win, text="TARGET NAME  —  press the UP arrow", pos=(0, 0.24),
+        height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
-    name = visual.TextStim(
-        win, text=target_name, pos=(0, 0.04), height=0.12,
+    target_stim = visual.TextStim(
+        win, text=target_name, pos=(0, 0.15), height=0.085,
         color=CONFIG["color_accent"], font=CONFIG["font_display"], bold=True,
     )
-    rule = visual.TextStim(
+    secret_label = visual.TextStim(
+        win, text="NAME TO REMEMBER  —  press the DOWN arrow", pos=(0, -0.04),
+        height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
+    )
+    secret_stim = visual.TextStim(
+        win, text=secret_name, pos=(0, -0.13), height=0.085,
+        color=CONFIG["color_text"], font=CONFIG["font_display"], bold=True,
+    )
+    note = visual.TextStim(
         win,
-        text=(
-            f"Press the UP arrow every time {target_name} appears.\n"
-            "Press the DOWN arrow for all other names."
-        ),
-        pos=(0, -0.16), height=0.028,
-        color=CONFIG["color_text"], font=CONFIG["font_body"],
-        alignText="center", wrapWidth=1.2,
+        text="Press DOWN for every other name as well.",
+        pos=(0, -0.26), height=0.024,
+        color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
     while True:
-        header(win, "TARGET CONFIRMED")
-        panel(win, width=1.25, height=0.7)
-        caption.draw()
-        name.draw()
-        rule.draw()
+        header(win, "RESPONSE RULES")
+        panel(win, width=1.3, height=0.78)
+        target_label.draw()
+        target_stim.draw()
+        secret_label.draw()
+        secret_stim.draw()
+        note.draw()
         footer(win, "Press SPACE to begin   ·   ESC to quit")
         win.flip()
         wait_for_keys([CONFIG["advance_key"]])
-        return
-
-
-def show_probe_cue_text(win, probe_name, block_idx, n_blocks, outlet):
-    """Fallback non-card probe cue (used when card draw is disabled)."""
-    outlet.push_sample([MARKER_PROBE_CUE])
-    caption = visual.TextStim(
-        win, text="REMEMBER THIS NAME", pos=(0, 0.16), height=0.026,
-        color=CONFIG["color_dim"], font=CONFIG["font_body"],
-    )
-    name = visual.TextStim(
-        win, text=probe_name, pos=(0, 0.0), height=0.11,
-        color=CONFIG["color_text"], font=CONFIG["font_display"], bold=True,
-    )
-    while True:
-        header(win, f"BLOCK {block_idx} / {n_blocks}")
-        panel(win, width=1.1, height=0.5)
-        caption.draw()
-        name.draw()
-        footer(win, "Press SPACE when ready   ·   ESC to quit")
-        win.flip()
-        wait_for_keys([CONFIG["advance_key"]], min_wait=CONFIG["probe_view_min"])
         return
 
 
@@ -584,29 +566,9 @@ def run_trial(win, outlet, stim_text, name, trial_type):
     }
 
 
-def draw_block_probe(win, mouse, target_name, block_idx, n_blocks, outlet):
-    """Draw the block's secret via the card mechanic (or text fallback)."""
-    pool = CONFIG["master_name_pool"]
-    candidates = [n for n in pool if n != target_name]
-
-    if CONFIG["use_card_draw_for_probe"]:
-        return run_card_draw(
-            win, mouse,
-            candidate_pool=candidates,
-            n_cards=CONFIG["probe_draw_n_cards"],
-            header_label=f"BLOCK {block_idx} / {n_blocks}  ·  DRAW THE NAME",
-            prompt_text="Draw a card to reveal the name to remember.",
-            reveal_caption="Remember this name for the upcoming block.",
-            outlet=outlet, reveal_marker=MARKER_PROBE_CUE,
-            min_view=CONFIG["probe_view_min"],
-        )
-    # Fallback: pick randomly and show a plain text cue.
-    probe_name = random.choice(candidates)
-    show_probe_cue_text(win, probe_name, block_idx, n_blocks, outlet)
-    return probe_name
-
-
-def run_session(win, mouse, outlet, target_name):
+def run_session(win, outlet, target_name, secret_name):
+    """Run all blocks. The probe (secret) and target are constant; only the
+    eight irrelevants are re-drawn fresh from the pool each block."""
     outlet.push_sample([MARKER_SESSION_START])
     pool = CONFIG["master_name_pool"]
     n_blocks = CONFIG["n_blocks"]
@@ -618,10 +580,7 @@ def run_session(win, mouse, outlet, target_name):
 
     results = []
     for block_idx in range(1, n_blocks + 1):
-        probe_name = draw_block_probe(
-            win, mouse, target_name, block_idx, n_blocks, outlet
-        )
-        sequence = build_block(target_name, probe_name, pool)
+        sequence = build_block(target_name, secret_name, pool)
 
         outlet.push_sample([MARKER_BLOCK_START])
         for pos, (name, trial_type) in enumerate(sequence, start=1):
@@ -630,7 +589,7 @@ def run_session(win, mouse, outlet, target_name):
             row.update({
                 "block": block_idx,
                 "position_in_block": pos,
-                "block_probe": probe_name,
+                "session_probe": secret_name,
                 "session_target": target_name,
             })
             results.append(row)
@@ -651,7 +610,7 @@ def save_results(results, target_name):
 
     fieldnames = [
         "block", "position_in_block", "stimulus", "trial_type",
-        "marker_code", "block_probe", "session_target",
+        "marker_code", "session_probe", "session_target",
         "expected_key", "response", "correct", "rt_seconds",
         "stim_onset_psychopy", "stim_onset_lsl",
     ]
@@ -703,7 +662,7 @@ def main():
 
     try:
         show_instructions(win)
-        # Phase 1 — draw the constant target from a deck of cards.
+        # Phase 1 — draw the constant target, then the constant secret.
         target_name = run_card_draw(
             win, mouse,
             candidate_pool=CONFIG["master_name_pool"],
@@ -711,11 +670,23 @@ def main():
             header_label="DRAW YOUR TARGET",
             prompt_text="Draw a card to receive your target name.",
             reveal_caption="This is your target name for the whole session.",
-            min_view=CONFIG["probe_view_min"],
+            min_view=CONFIG["reveal_view_min"],
         )
-        show_target_rule(win, target_name)
+        secret_name = run_card_draw(
+            win, mouse,
+            candidate_pool=[n for n in CONFIG["master_name_pool"]
+                            if n != target_name],
+            n_cards=CONFIG["secret_draw_n_cards"],
+            header_label="DRAW A NAME TO REMEMBER",
+            prompt_text="Draw a card to receive the name to remember.",
+            reveal_caption=("Remember this name. Respond to it with the "
+                            "DOWN arrow, the same as the other names."),
+            outlet=outlet, reveal_marker=MARKER_PROBE_CUE,
+            min_view=CONFIG["reveal_view_min"],
+        )
+        show_rules(win, target_name, secret_name)
 
-        results = run_session(win, mouse, outlet, target_name)
+        results = run_session(win, outlet, target_name, secret_name)
         csv_path = save_results(results, target_name)
         show_goodbye(win, csv_path, len(results))
 
