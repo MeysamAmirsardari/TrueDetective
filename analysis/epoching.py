@@ -20,9 +20,14 @@ from .preprocess import PreprocResult
 def make_epochs(raw: mne.io.BaseRaw, events: np.ndarray) -> mne.Epochs:
     """Epoch one session around stimulus markers.
 
-    Only probe/irrelevant/target codes are kept; control markers
+    Only secret/irrelevant/target codes are kept; control markers
     (session/block start, cues) are ignored by passing an explicit event_id.
-    Peak-to-peak rejection is in volts, so convert the µV threshold.
+
+    Epoching is purely stimulus-locked: every presentation is included
+    regardless of the participant's button response — correctly answered AND
+    wrongly answered targets all contribute to the average. The only trials
+    dropped are those exceeding the ±µV artifact threshold, which is
+    response-agnostic. Peak-to-peak rejection is in volts, so convert µV.
     """
     # Drop events whose codes aren't in EVENT_ID (control markers 10/11/12/99).
     keep = np.isin(events[:, 2], list(cfg.EVENT_ID.values()))

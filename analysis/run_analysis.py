@@ -154,10 +154,12 @@ def main() -> None:
     csvs = find_behavioral()
     if csvs:
         behav = analyze_behavioral(csvs)
-        print("\nBehavioral:")
+        print("\nBehavioral (all trials retained — correct AND incorrect):")
         for cond, s in behav.by_condition.items():
-            print(f"   {cond:11s} acc={s['accuracy']:.2f}  "
-                  f"RT={s['rt_mean']*1000:.0f}±{s['rt_sd']*1000:.0f}ms (n={s['n']})")
+            print(f"   {cond:11s} n={s['n']:3d} "
+                  f"(correct {s['n_correct']}, wrong {s['n_incorrect']})  "
+                  f"acc={s['accuracy']:.2f}  "
+                  f"RT={s['rt_mean']*1000:.0f}±{s['rt_sd']*1000:.0f}ms")
         print(f"   secret vs irrelevant RT: t={behav.secret_vs_irr_rt_t:.2f}, "
               f"p={behav.secret_vs_irr_rt_p:.4f}")
 

@@ -58,6 +58,8 @@ def _condition_stats(df: pd.DataFrame) -> dict[str, dict[str, float]]:
         rts = rts[np.isfinite(rts)]
         out[str(cond)] = {
             "n": int(len(g)),
+            "n_correct": int((g["correct"] == 1).sum()),
+            "n_incorrect": int((g["correct"] != 1).sum()),
             "accuracy": float(g["correct"].mean()),
             "rt_mean": float(rts.mean()) if rts.size else float("nan"),
             "rt_median": float(np.median(rts)) if rts.size else float("nan"),
