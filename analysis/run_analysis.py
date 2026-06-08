@@ -78,7 +78,6 @@ def plot_erps(evokeds: dict, channel: str, path) -> None:
         ax.plot(evokeds["secret"].times, (p - i) * cfg.MICROVOLT,
                 label="secret − irrelevant", color="k", ls="--", lw=1.2)
 
-    # ax.axvspan(*cfg.P300_WINDOW, color="grey", alpha=0.15, label="P300 window")
     ax.axvline(0, color="k", lw=0.6)
     ax.axhline(0, color="k", lw=0.6)
     ax.invert_yaxis()                  # ERP convention: positive plotted down

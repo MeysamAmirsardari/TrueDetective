@@ -92,7 +92,6 @@ def plot_time(times, mean, std, path):
                     label="±1 SD across folds")
     ax.axhline(0.5, color="k", ls="--", lw=0.8, label="chance")
     ax.axvline(0, color="k", lw=0.6)
-    ax.axvspan(*cfg.P300_WINDOW, color="grey", alpha=0.15, label="P300 window")
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("ROC-AUC")
     ax.set_title("Time-resolved decoding: secret vs irrelevant")
