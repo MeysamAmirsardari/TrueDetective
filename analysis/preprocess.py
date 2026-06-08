@@ -103,15 +103,18 @@ def preprocess(session: SessionData) -> PreprocResult:
     raw.notch_filter(cfg.LINE_FREQ, verbose="ERROR")
     raw.filter(cfg.HP_FREQ, cfg.LP_FREQ, fir_design="firwin", verbose="ERROR")
 
-    # ── 3. Common-average reference ────────────────────────────────────
-    raw.set_eeg_reference(cfg.REFERENCE, verbose="ERROR")
-
-    # ── 4. ICA ocular-artifact removal ─────────────────────────────────
+    # ── 3. ICA ocular-artifact removal ─────────────────────────────────
+    # Fit ICA *before* re-referencing: the common-average reference makes the
+    # data rank-deficient (one degree of freedom removed), which would make the
+    # PCA whitening invert a near-zero eigenvalue (divide-by-zero/overflow).
     ica_excluded: list[int] = []
     try:
         ica_excluded = _run_ica(raw)
     except Exception as exc:                     # ICA is best-effort
         mne.utils.warn(f"ICA skipped for {session.name}: {exc}")
+
+    # ── 4. Common-average reference (after ICA, on the cleaned signal) ──
+    raw.set_eeg_reference(cfg.REFERENCE, verbose="ERROR")
 
     return PreprocResult(
         raw=raw,
@@ -129,24 +132,32 @@ def _run_ica(raw: mne.io.BaseRaw) -> list[int]:
     high-passed copy (standard MNE practice) and apply the unmixing to the
     real, 0.1 Hz data. Blink components are found by correlating with the
     frontal channels acting as EOG proxies.
+
+    The whole computation runs under ``np.errstate(all="ignore")``: on newer
+    numpy/scipy, ``scipy.linalg.pinv`` emits spurious "divide by zero / overflow
+    / invalid in matmul" warnings while reconstructing its SVD, even though the
+    input is full-rank and the result is finite and valid (verified downstream).
+    Silencing them here keeps the run output clean without masking real issues
+    elsewhere in the pipeline.
     """
-    ica_raw = raw.copy().filter(cfg.ICA_FIT_HP, None,
-                                fir_design="firwin", verbose="ERROR")
-    ica = mne.preprocessing.ICA(
-        n_components=cfg.ICA_N_COMPONENTS,
-        method=cfg.ICA_METHOD,
-        random_state=cfg.ICA_RANDOM_STATE,
-        max_iter="auto",
-    )
-    ica.fit(ica_raw, verbose="ERROR")
+    with np.errstate(all="ignore"):
+        ica_raw = raw.copy().filter(cfg.ICA_FIT_HP, None,
+                                    fir_design="firwin", verbose="ERROR")
+        ica = mne.preprocessing.ICA(
+            n_components=cfg.ICA_N_COMPONENTS,
+            method=cfg.ICA_METHOD,
+            random_state=cfg.ICA_RANDOM_STATE,
+            max_iter="auto",
+        )
+        ica.fit(ica_raw, verbose="ERROR")
 
-    # Use whichever frontal proxies survived bad-channel dropping.
-    eog_chs = [ch for ch in cfg.EOG_PROXY_CHANNELS if ch in raw.ch_names]
-    exclude: list[int] = []
-    for ch in eog_chs:
-        idx, _ = ica.find_bads_eog(raw, ch_name=ch, verbose="ERROR")
-        exclude.extend(idx)
+        # Use whichever frontal proxies survived bad-channel dropping.
+        eog_chs = [ch for ch in cfg.EOG_PROXY_CHANNELS if ch in raw.ch_names]
+        exclude: list[int] = []
+        for ch in eog_chs:
+            idx, _ = ica.find_bads_eog(raw, ch_name=ch, verbose="ERROR")
+            exclude.extend(idx)
 
-    ica.exclude = sorted(set(exclude))
-    ica.apply(raw, verbose="ERROR")
+        ica.exclude = sorted(set(exclude))
+        ica.apply(raw, verbose="ERROR")
     return ica.exclude
