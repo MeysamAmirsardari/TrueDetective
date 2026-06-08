@@ -13,6 +13,17 @@ Everything is driven by config.py; this module only orchestrates and reports.
 
 from __future__ import annotations
 
+# Run either as a module (python -m analysis.run_analysis) or directly
+# (python analysis/run_analysis.py): if launched as a script, put the repo root
+# on sys.path so the absolute `analysis.*` imports below resolve.
+import pathlib as _pl
+import sys as _sys
+if __package__ in (None, ""):
+    for _root in _pl.Path(__file__).resolve().parents:
+        if (_root / "analysis" / "__init__.py").exists():
+            _sys.path.insert(0, str(_root))
+            break
+
 import json
 from dataclasses import asdict
 
@@ -22,12 +33,12 @@ import matplotlib.pyplot as plt
 import mne
 import numpy as np
 
-from . import config as cfg
-from .behavioral import analyze_behavioral
-from .epoching import build_session_epochs, pool_epochs
-from .erp_stats import analyze_p300, evokeds_by_condition
-from .io_xdf import load_session
-from .preprocess import preprocess
+from analysis import config as cfg
+from analysis.behavioral import analyze_behavioral
+from analysis.epoching import build_session_epochs, pool_epochs
+from analysis.erp_stats import analyze_p300, evokeds_by_condition
+from analysis.io_xdf import load_session
+from analysis.preprocess import preprocess
 
 
 def _json_default(o):
@@ -67,7 +78,7 @@ def plot_erps(evokeds: dict, channel: str, path) -> None:
         ax.plot(evokeds["secret"].times, (p - i) * cfg.MICROVOLT,
                 label="secret − irrelevant", color="k", ls="--", lw=1.2)
 
-    ax.axvspan(*cfg.P300_WINDOW, color="grey", alpha=0.15, label="P300 window")
+    # ax.axvspan(*cfg.P300_WINDOW, color="grey", alpha=0.15, label="P300 window")
     ax.axvline(0, color="k", lw=0.6)
     ax.axhline(0, color="k", lw=0.6)
     ax.invert_yaxis()                  # ERP convention: positive plotted down
@@ -98,33 +109,41 @@ def plot_topomap(evokeds: dict, path) -> None:
         mne.utils.warn(f"topomap skipped: {exc}")
 
 
-# ── Main ───────────────────────────────────────────────────────────────
-def main() -> None:
+# ── Shared loading ──────────────────────────────────────────────────────
+def build_pooled_epochs(verbose: bool = True):
+    """Load → preprocess → epoch → pool every session in data/.
+
+    Shared by the ERP analysis and the decoding module so both operate on the
+    exact same cleaned, channel-aligned epochs. Returns (pooled, report).
+    """
     xdf_paths = find_xdf()
     if not xdf_paths:
         raise SystemExit(f"No XDF files found in {cfg.DATA_DIR}")
 
-    print(f"Found {len(xdf_paths)} XDF session(s).")
-    per_session_report = []
-    epochs_list = []
+    if verbose:
+        print(f"Found {len(xdf_paths)} XDF session(s).")
+    per_session_report, epochs_list = [], []
 
     for path in xdf_paths:
-        print(f"\n── {path.name} ──")
+        if verbose:
+            print(f"\n── {path.name} ──")
         session = load_session(path)
         pre = preprocess(session)
 
-        if pre.bads:
-            for ch, why in pre.bad_reasons.items():
-                print(f"   bad channel {ch}: {why}")
-        else:
-            print("   no bad channels detected")
-        print(f"   ICA excluded {pre.n_ica_excluded} component(s)")
+        if verbose:
+            if pre.bads:
+                for ch, why in pre.bad_reasons.items():
+                    print(f"   bad channel {ch}: {why}")
+            else:
+                print("   no bad channels detected")
+            print(f"   ICA excluded {pre.n_ica_excluded} component(s)")
 
         epochs = build_session_epochs(session, pre)
         epochs_list.append(epochs)
         counts = {c: int(len(epochs[c])) for c in cfg.EVENT_ID
                   if c in epochs.event_id}
-        print(f"   epochs kept: {counts}")
+        if verbose:
+            print(f"   epochs kept: {counts}")
 
         per_session_report.append({
             "session": session.name,
@@ -133,8 +152,12 @@ def main() -> None:
             "epoch_counts": counts,
         })
 
-    # ── Pool & analyse ─────────────────────────────────────────────────
-    pooled = pool_epochs(epochs_list)
+    return pool_epochs(epochs_list), per_session_report
+
+
+# ── Main ───────────────────────────────────────────────────────────────
+def main() -> None:
+    pooled, per_session_report = build_pooled_epochs(verbose=True)
     print(f"\nPooled epochs: {len(pooled)} total")
 
     p300 = analyze_p300(pooled)

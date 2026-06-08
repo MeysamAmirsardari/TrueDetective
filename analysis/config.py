@@ -70,6 +70,46 @@ CLUSTER_PERMUTATIONS = 1000
 CLUSTER_SEED = 2026
 CLUSTER_MIN_DURATION = 0.025      # s; ignore sub-component "clusters" (noise)
 
+# ── Decoding (time-resolved MVPA) ──────────────────────────────────────
+# Binary decoding of the concealed item vs neutral items. Targets are ignored
+# entirely. ROC-AUC is the metric because the classes are imbalanced
+# (~1 secret per ~8 irrelevants); chance AUC = 0.5 regardless of that ratio,
+# and the classifier is class-weight balanced.
+DECODE_POSITIVE = "secret"        # class 1
+DECODE_NEGATIVE = "irrelevant"    # class 0  (targets excluded)
+DECODE_CV_FOLDS = 5
+DECODE_SCORING = "roc_auc"
+DECODE_SEED = 2026
+DECODE_CHANNEL_WINDOW = (0.0, 0.8)   # post-stim window for per-channel decoding
+DECODE_TOP_K = 8                  # how many "most decodable" channels to flag
+
+# ── Res-TCN-SE-Attention (deep decoder; Nicolescu et al. 2026) ─────────
+# Faithful adaptation of the paper's best subject-dependent model to our
+# 28-channel / 250 Hz CIT epochs. NB: that 99.94% was on 27 subjects with
+# heavily-overlapping windows; on our single-subject ~460-trial set the model
+# is expected to be power-limited and is reported with honest cross-validated
+# AUC, alongside the linear baseline.
+TCN_FILTERS = (64, 96, 128, 192, 256)   # per residual block
+TCN_DILATIONS = (1, 2, 4, 8, 12)        # per residual block
+TCN_INIT_KERNEL = 5
+TCN_BLOCK_KERNEL = 3
+TCN_RAW_EMBED = 192               # raw-branch dense embedding
+TCN_DWT_EMBED = 128
+TCN_FEATS_EMBED = 192             # first FEATS dense; second projects to 128
+TCN_HEAD_UNITS = 160
+TCN_DROPOUT = 0.3
+TCN_SPATIAL_DROPOUT = 0.1
+TCN_NOISE_STD = 0.01              # Gaussian input noise (raw branch, train only)
+TCN_EPOCHS = 120
+TCN_BATCH = 128
+TCN_LR = 1e-3
+TCN_WEIGHT_DECAY = 1e-4
+TCN_VAL_FRAC = 0.15              # inner validation split for model selection
+TCN_CV_FOLDS = 5
+TCN_SEED = 2026
+DWT_WAVELET = "db4"
+DWT_LEVEL = 4
+
 # ── Misc ───────────────────────────────────────────────────────────────
 MONTAGE = "standard_1020"
 MICROVOLT = 1e6                   # volts -> µV for reporting/plots
