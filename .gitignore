@@ -225,3 +225,11 @@ data/
 # Generated analysis artifacts (reproducible by re-running the pipeline)
 analysis/results/
 analysis/figures/
+# Narration task: stimulus images (placeholders are auto-generated; real photos
+# may be large/PII), and the lie-detector outputs. (data/ already covers audio.)
+narration_task/stimuli/*.png
+narration_task/stimuli/*.jpg
+narration_task/stimuli/*.jpeg
+narration_task/stimuli/*.bmp
+narration_task/results/
+narration_task/figures/

@@ -411,8 +411,8 @@ def show_instructions(win):
         win,
         text=(
             "First you will draw two cards, one after the other:\n"
-            "    •  a TARGET name — press the RIGHT arrow whenever it appears.\n"
-            "    •  a name to REMEMBER — press the LEFT arrow for it, the\n"
+            "    •  a TARGET name : press the RIGHT arrow whenever it appears.\n"
+            "    •  a name to REMEMBER : press the LEFT arrow for it, the\n"
             "       same as every other name.\n\n"
             "Both names stay the same for the whole session.\n\n"
             "After that, names appear one at a time. Press RIGHT only for your\n"
@@ -438,7 +438,7 @@ def show_instructions(win):
 def show_rules(win, target_name, secret_name):
     """Confirm the response rule for both the target and the secret."""
     target_label = visual.TextStim(
-        win, text="TARGET NAME  —  press the RIGHT arrow", pos=(0, 0.24),
+        win, text="TARGET NAME  :  press the RIGHT arrow", pos=(0, 0.24),
         height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
     target_stim = visual.TextStim(
@@ -446,7 +446,7 @@ def show_rules(win, target_name, secret_name):
         color=CONFIG["color_accent"], font=CONFIG["font_display"], bold=True,
     )
     secret_label = visual.TextStim(
-        win, text="NAME TO REMEMBER  —  press the LEFT arrow", pos=(0, -0.04),
+        win, text="NAME TO REMEMBER  :  press the LEFT arrow", pos=(0, -0.04),
         height=0.024, color=CONFIG["color_dim"], font=CONFIG["font_body"],
     )
     secret_stim = visual.TextStim(
